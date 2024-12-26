@@ -2,11 +2,30 @@
 """Django's command-line utility for administrative tasks."""
 import os
 import sys
+import threading
+from extractor import MultiDeviceVideoSubscriber  # Import the extractor
 
+def start_extractor():
+    """Start the MultiDeviceVideoSubscriber in a background thread"""
+    subscriber = MultiDeviceVideoSubscriber(
+        broker_address="localhost",
+        broker_port=1883,
+        topic="video/stream",
+        base_output_folder="received_frames",
+        username="admin",
+        password="letmein",
+    )
+    subscriber.start()
 
 def main():
     """Run administrative tasks."""
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "curium_surgai_backend.settings")
+
+    # Start extractor in a background thread
+    extractor_thread = threading.Thread(target=start_extractor)
+    extractor_thread.daemon = True
+    extractor_thread.start()
+
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:
