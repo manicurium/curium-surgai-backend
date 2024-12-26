@@ -9,5 +9,5 @@ schema_view = get_schema_view(
         description="Curium Surgai Backend management API",
     ),
     public=True,
-    permission_classes=(permissions.AllowAny,),
+    permission_classes=(permissions.AllowAny,),  # You can set this to a more restricted permission if needed
 )

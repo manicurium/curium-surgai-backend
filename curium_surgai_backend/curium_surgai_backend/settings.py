@@ -183,8 +183,7 @@ CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOWS_CREDENTIALS = True
 CORS_ALLOW_HEADERS = (
     *default_headers,
-    "volume-id",
-    "volume_id",
+    "Authorization",
 )
 
 
@@ -204,7 +203,7 @@ CURIUM_WORKFLOW_SERVICE_URL = os.getenv(
 
 SWAGGER_SETTINGS = {
     "SECURITY_DEFINITIONS": {
-        "Bearer": {"type": "apiKey", "name": "Authorization", "in": "header"}
+        "Bearer": {"type": "apiKey", "name": "Authorization", "in": "header", "description": "JWT token for authentication"}
     },
     "USE_SESSION_AUTH": False,
 }
