@@ -38,7 +38,7 @@ def registration_view(request):
 
 @swagger_auto_schema(
     method="get",
-    responses={200: ProfileSerializer},
+    responses={200: ProfileSerializer(many=True)},
 )
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
