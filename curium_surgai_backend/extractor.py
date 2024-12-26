@@ -240,22 +240,4 @@ class MultiDeviceVideoSubscriber:
             self.monitor_thread.join()
         self.client.loop_stop()
         self.client.disconnect()
-
-
-if __name__ == "__main__":
-    # Example usage
-    subscriber = MultiDeviceVideoSubscriber(
-        broker_address="localhost",
-        broker_port=1883,
-        topic="video/stream",
-        base_output_folder="received_frames",
-        username="admin",
-        password="letmein",
-    )
-
-    try:
-        subscriber.start()
-    except KeyboardInterrupt:
-        subscriber.stop()
-    except Exception as e:
-        logging.exception(e)
+        logging.debug("Subscriber stopped successfully.")
