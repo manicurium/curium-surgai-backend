@@ -13,3 +13,4 @@ class Report(models.Model):
     class Meta:
         verbose_name = "Report"
         verbose_name_plural = "Reports"
+        db_table = 'report'

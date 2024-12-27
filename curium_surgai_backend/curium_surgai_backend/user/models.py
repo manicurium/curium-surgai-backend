@@ -56,3 +56,6 @@ class User(AbstractBaseUser):
 
     class Meta:
         abstract = False
+        verbose_name = "User"
+        verbose_name_plural = "Users"
+        db_table = 'user'

@@ -15,3 +15,4 @@ class License(models.Model):
     class Meta:
         verbose_name = "License"
         verbose_name_plural = "Licenses"
+        db_table = 'license'

@@ -17,3 +17,4 @@ class Frame(models.Model):
     class Meta:
         verbose_name = "Frame"
         verbose_name_plural = "Frames"
+        db_table = 'frame'
