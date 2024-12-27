@@ -4,7 +4,7 @@ from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
 
 
 class MyAccountManager(BaseUserManager):
-    def create_user(self, email_id, fname, lname, password=None, role_type=None, license=None):
+    def create_user(self, email_id, fname, lname, password=None, role_type=None):
         if not email_id:
             raise ValueError("Users must have an email address")
 
@@ -13,7 +13,6 @@ class MyAccountManager(BaseUserManager):
             fname=fname,
             lname=lname,
             role_type=role_type,
-            license=license,  # Add the license parameter when creating a user
         )
 
         user.set_password(password)
@@ -40,7 +39,6 @@ class User(AbstractBaseUser):
         choices=SurgaiRole.choices,
         default=SurgaiRole.PRACTITIONER,  # Default to PRACTITIONER
     )
-    license = models.ForeignKey('license.License', on_delete=models.SET_NULL, null=True, blank=True)  # Foreign key to License model
 
     USERNAME_FIELD = "username"
     REQUIRED_FIELDS = ["email_id"]
