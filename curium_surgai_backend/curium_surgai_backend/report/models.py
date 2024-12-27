@@ -3,7 +3,15 @@ import uuid
 
 class Report(models.Model):
     report_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, primary_key=True)
-    video_id = models.ForeignKey('video.Video', on_delete=models.CASCADE, to_field='video_id')  # ForeignKey to the Video model
+
+    # ForeignKey to the Video model, explicitly setting the column name to 'video_id'
+    video_id = models.ForeignKey(
+        'video.Video',
+        on_delete=models.CASCADE,
+        to_field='video_id',
+        db_column='video_id'
+    )
+
     report_date = models.DateTimeField(auto_now_add=True)  # Auto-generated timestamp for when the report is created
     report_json = models.JSONField()  # JSON type to store report data
 

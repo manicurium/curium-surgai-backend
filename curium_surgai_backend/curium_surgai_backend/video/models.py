@@ -5,8 +5,13 @@ class Video(models.Model):
     # video_id is a UUID field and also the primary key for the model
     video_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, primary_key=True)
 
-    # Correct reference to the 'User' model from the 'user' app
-    uploaded_by = models.ForeignKey('user.User', on_delete=models.CASCADE, to_field='id')
+    # Correct reference to the 'User' model from the 'user' app, with explicit column name
+    uploaded_by = models.ForeignKey(
+        'user.User',
+        on_delete=models.CASCADE,
+        to_field='id',
+        db_column='uploaded_by'
+    )
 
     # upload_date is a timestamp field, automatically set when the video is uploaded
     upload_date = models.DateTimeField(auto_now_add=True)
