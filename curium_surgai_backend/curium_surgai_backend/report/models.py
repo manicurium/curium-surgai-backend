@@ -1,15 +1,13 @@
 from django.db import models
 import uuid
+from video.models import Video
+
 
 class Report(models.Model):
-    report_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, primary_key=True)
-    video_id = models.ForeignKey('video.Video', on_delete=models.CASCADE, to_field='video_id')  # ForeignKey to the Video model
-    report_date = models.DateTimeField(auto_now_add=True)  # Auto-generated timestamp for when the report is created
-    report_json = models.JSONField()  # JSON type to store report data
-
-    def __str__(self):
-        return f"Report {self.report_id} for Video {self.video_id}"
+    report_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    video = models.ForeignKey(Video, on_delete=models.CASCADE, related_name="reports")
+    report_date = models.DateTimeField(auto_now_add=True)
+    report_json = models.JSONField()  # Use models.JSONField for Django 3.1+
 
     class Meta:
-        verbose_name = "Report"
-        verbose_name_plural = "Reports"
+        db_table = "surgai_report"

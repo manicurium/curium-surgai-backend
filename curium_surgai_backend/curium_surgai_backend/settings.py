@@ -16,20 +16,26 @@ import os
 
 from corsheaders.defaults import default_headers
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent
-
-
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
-
-# SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = "django-insecure-nma=xi6x2p-crjg^ifqqkapyu1qjd0l=+wn)-rijk_o%$!k3w_"
 
-# SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
+USE_TZ = True
+TIME_ZONE = "UTC"
+
 ALLOWED_HOSTS = ["*"]
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "ALGORITHM": "HS256",
+    "SIGNING_KEY": "your-secret-key",  # Replace with your actual secret key
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "USER_ID_FIELD": "id",
+    "USER_ID_CLAIM": "user_id",
+}
 
 LOGGING = {
     "version": 1,
@@ -52,25 +58,16 @@ LOGGING = {
     },
 }
 
-REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
-    ),
-    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
-    "DEFAULT_FILTER_BACKENDS": ("django_filters.rest_framework.DjangoFilterBackend",),
-    "ORDERING_PARAM": "sort",
-    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.LimitOffsetPagination",
-    "PAGE_SIZE": 100,
-}
+STATIC_URL = "static/"
 
-SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
-}
-
-# Application definition
 
 INSTALLED_APPS = [
+    "user",
+    "swagger",
+    "video",
+    "frame",
+    "report",
+    "device",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -78,12 +75,6 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework_simplejwt.token_blacklist",
-    "curium_surgai_backend.user",
-    "curium_surgai_backend.video",
-    "curium_surgai_backend.frame",
-    "curium_surgai_backend.license",
-    "curium_surgai_backend.report",
-    "curium_surgai_backend.swagger",
     "rest_framework",
     "corsheaders",
     "django_filters",
@@ -101,7 +92,20 @@ MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
 ]
 
-ROOT_URLCONF = "curium_surgai_backend.urls"
+
+ROOT_URLCONF = "urls"
+
+SWAGGER_SETTINGS = {
+    "SECURITY_DEFINITIONS": {
+        "Bearer": {
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header",
+            "description": "JWT token for authentication",
+        }
+    },
+    "USE_SESSION_AUTH": False,
+}
 
 TEMPLATES = [
     {
@@ -119,105 +123,34 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = "curium_surgai_backend.wsgi.application"
-
-
-# Database
-# https://docs.djangoproject.com/en/4.2/ref/settings/#databases
-
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("DB_NAME", default="curium_surgai_backend"),
+        "NAME": os.getenv("DB_NAME", default="curium_surgai_user"),
         "USER": os.getenv("POSTGRES_USERNAME", default="postgres"),
-        "PASSWORD": os.getenv("POSTGRES_PASSWORD", default="postgres"),
+        "PASSWORD": os.getenv("POSTGRES_PASSWORD", default="#Welcome123"),
         "HOST": os.getenv("POSTGRES_HOST", default="localhost"),
         "PORT": os.getenv("POSTGRES_PORT", default="5432"),
     }
 }
 
-AUTH_USER_MODEL = "user.User"
 
-# Password validation
-# https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
-
-AUTH_PASSWORD_VALIDATORS = [
-    {
-        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
-    },
-    {
-        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
-    },
-    {
-        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
-    },
-    {
-        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
-    },
-]
-
-
-# Internationalization
-# https://docs.djangoproject.com/en/4.2/topics/i18n/
-
-LANGUAGE_CODE = "en-us"
-
-TIME_ZONE = "UTC"
-
-USE_I18N = True
-
-USE_TZ = True
-
-
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/4.2/howto/static-files/
-
-STATIC_URL = "static/"
-
-# Default primary key field type
-# https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
-
-DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-
-CORS_ALLOW_ALL_ORIGINS = True
-CORS_ALLOWS_CREDENTIALS = True
-CORS_ALLOW_HEADERS = (
-    *default_headers,
-    "Authorization",
-)
-
-
-MEDIA_URL = "/data/"
-MEDIA_ROOT = os.path.join(BASE_DIR, "data")
-DATA_UPLOAD_MAX_NUMBER_FIELDS = None
-DATA_UPLOAD_MAX_NUMBER_FILES = None
-DATA_UPLOAD_MAX_MEMORY_SIZE = None
-CURIUM_STUDY_RECEIVER_URL = os.getenv(
-    "CURIUM_STUDY_RECEIVER_URL", default="http://curium_hia:8051"
-)
-
-CURIUM_WORKFLOW_SERVICE_URL = os.getenv(
-    "CURIUM_WORKFLOW_SERVICE_URL", default="http://localhost:7501"
-)
-
-
-SWAGGER_SETTINGS = {
-    "SECURITY_DEFINITIONS": {
-        "Bearer": {"type": "apiKey", "name": "Authorization", "in": "header", "description": "JWT token for authentication"}
-    },
-    "USE_SESSION_AUTH": False,
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ),
+    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
 }
 
+AUTH_USER_MODEL = "user.User"
 
-# Notification configs
-SMTP_USERNAME = os.getenv("SMTP_USERNAME")
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
+MEDIA_ROOT = "data/"
 
-NOTIFICATION_CLIENT = os.getenv("NOTIFICATION_CLIENT", default="default")
-SMTP_SERVER_NAME = os.getenv("SMTP_SERVER_NAME")
-SMTP_PORT = int(os.getenv("SMTP_PORT", default=465))
-
-CONFIG_BUCKET_NAME = os.getenv("CONFIG_BUCKET_NAME")
-AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
-AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
-AWS_REGION = os.getenv("AWS_REGION", default="us-east-1")
+# Email settings
+EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+EMAIL_HOST = "smtp.gmail.com"
+EMAIL_PORT = 465
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = "reports@curium.life"
+EMAIL_HOST_PASSWORD = "Cur@2023!"
+DEFAULT_FROM_EMAIL = "reports@curium.life"

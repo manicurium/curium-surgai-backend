@@ -1,65 +1,45 @@
 from rest_framework import status
+from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from django.shortcuts import get_object_or_404
+from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
-from curium_surgai_backend.frame.models import Frame  # Import Frame model
-from curium_surgai_backend.frame.serializers import FrameSerializer  # Import Frame serializer
+from .models import Video
+from .serializers import ProcessedFrameSerializer
 
 
-# Frame creation view - user uploads a new frame
-@swagger_auto_schema(
-    method="post",
-    request_body=FrameSerializer,
-    responses={201: FrameSerializer},
-)
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])  # Ensure only authenticated users can upload frames
-def upload_frame(request):
-    if request.method == "POST":
-        serializer = FrameSerializer(data=request.data)
+class ProcessedFrameCreateView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
 
-        # Ensure the 'video_id' field is populated correctly and valid
+    @swagger_auto_schema(
+        operation_description="Create a processed frame entry for a video",
+        request_body=ProcessedFrameSerializer,
+        responses={
+            201: openapi.Response(
+                description="Frame processed successfully",
+                schema=ProcessedFrameSerializer,
+            ),
+            400: "Bad Request",
+            401: "Unauthorized",
+            404: "Video not found",
+        },
+    )
+    def post(self, request):
+        # Add video validation to ensure user owns the video
+        video_id = request.data.get("video")
+        if video_id:
+            video = get_object_or_404(Video, video_id=video_id)
+            if video.uploaded_by != request.user:
+                return Response(
+                    {"error": "You don't have permission to add frames to this video"},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+        serializer = ProcessedFrameSerializer(data=request.data)
         if serializer.is_valid():
-            # Optionally, you can assign the frame to the current video based on the incoming data
-            # Assuming you pass a 'video_id' with the frame data
             serializer.save()
-
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-        else:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-# Frame list view - user can get a list of frames associated with their videos
-@swagger_auto_schema(
-    method="get",
-    responses={200: FrameSerializer},
-)
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])  # Ensure only authenticated users can view frames
-def get_frames(request):
-    # Get all frames associated with the current authenticated user's videos
-    user = request.user
-    frames = Frame.objects.filter(video_id__uploaded_by=user)  # Filter frames by video uploader
-
-    # Serialize the frames
-    serializer = FrameSerializer(frames, many=True)
-    return Response(serializer.data, status=status.HTTP_200_OK)
-
-
-# Frame detail view - user can get details for a specific frame by processed_frame_id
-@swagger_auto_schema(
-    method="get",
-    responses={200: FrameSerializer},
-)
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])  # Ensure only authenticated users can view frame details
-def get_frame_detail(request, processed_frame_id):
-    try:
-        frame = Frame.objects.get(processed_frame_id=processed_frame_id)  # Fetch frame by UUID
-    except Frame.DoesNotExist:
-        return Response({"detail": "Frame not found."}, status=status.HTTP_404_NOT_FOUND)
-
-    # Serialize and return the frame details
-    serializer = FrameSerializer(frame)
-    return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

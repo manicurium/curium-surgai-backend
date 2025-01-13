@@ -56,6 +56,7 @@ class MultiDeviceVideoSubscriber:
         broker_address="localhost",
         broker_port=1883,
         topic="video/stream",
+        stream_timeout=20,
         base_output_folder=os.path.join(settings.MEDIA_ROOT, "received_frames"),
         username=None,
         password=None,
@@ -67,13 +68,14 @@ class MultiDeviceVideoSubscriber:
         self.base_output_folder = base_output_folder
         self.username = username
         self.password = password
+        self.stream_timeout = stream_timeout
 
         # Create base output folder
         os.makedirs(base_output_folder, exist_ok=True)
 
         # Dictionary to track each device's stream
         self.device_trackers = {}
-
+        self.active_streams = {}
         # Lock for thread-safe operations
         self.lock = threading.Lock()
         # Start status monitoring thread
@@ -96,9 +98,10 @@ class MultiDeviceVideoSubscriber:
             try:
                 # Extract device ID from topic
                 # Expected format: video/stream/{device_id}/metadata or video/stream/{device_id}/frame
-
-                device_id, timestamp = msg.topic.split("/")
-
+                parts = msg.topic.split("/")
+                logger.debug(f"parts {parts}")
+                device_id, timestamp = parts[2], parts[3]
+                logger.debug(f"{device_id},: {timestamp}")
                 if msg.topic.endswith("/metadata"):
                     self.handle_metadata(device_id, timestamp, msg.payload)
                 elif msg.topic.endswith("/frame"):
@@ -172,6 +175,10 @@ class MultiDeviceVideoSubscriber:
     def process_frame(self, device_id, frame_data, timestamp, metadata):
         """Process and save frame with its metadata"""
         try:
+
+            with self.lock:
+                self.active_streams[(device_id, timestamp)] = time.time()
+                logging.debug(f"Updated stream time for {device_id}/{timestamp}")
             tracker = self.device_trackers[device_id]
 
             # Update tracker stats
@@ -218,16 +225,66 @@ class MultiDeviceVideoSubscriber:
         except Exception as e:
             logging.debug(f"Error saving frame for device {device_id}: {e}")
 
+    def build_video(self, device_id, timestamp):
+        """Build video from frames after streaming has stopped"""
+        try:
+            folder_path = os.path.join(self.base_output_folder, device_id, timestamp)
+            frame_files = sorted(
+                [f for f in os.listdir(folder_path) if f.endswith(".jpg")]
+            )
+
+            if not frame_files:
+                logging.debug(f"No frames found in {folder_path}")
+                return
+
+            # Read first frame to get dimensions
+            first_frame = cv2.imread(os.path.join(folder_path, frame_files[0]))
+            height, width = first_frame.shape[:2]
+
+            # Create video writer
+            video_path = os.path.join(folder_path, "output.mp4")
+            fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+            out = cv2.VideoWriter(video_path, fourcc, 30.0, (width, height))
+
+            # Add all frames to video
+            for frame_file in frame_files:
+                frame_path = os.path.join(folder_path, frame_file)
+                frame = cv2.imread(frame_path)
+                out.write(frame)
+
+            out.release()
+            logging.debug(f"Video created at {video_path}")
+
+        except Exception as e:
+            logging.debug(f"Error building video: {e}")
+
     def monitor_streams(self):
-        """Monitor active streams and report status"""
+        """Monitor streams and detect when they've stopped"""
         while self.running:
-            time.sleep(5)  # Check every 5 seconds
-            with self.lock:
-                _ = datetime.now()
-                for device_id, tracker in self.device_trackers.items():
-                    status = tracker.get_status_report()
-                    logging.debug(f"\nStream Status - Device {device_id}:")
-                    logging.debug(json.dumps(status, indent=2))
+            try:
+                current_time = time.time()
+                with self.lock:
+                    completed_streams = []
+
+                    # Debug output
+                    logging.debug(f"Active streams: {self.active_streams}")
+
+                    for stream_key, last_frame_time in list(
+                        self.active_streams.items()
+                    ):
+                        device_id, timestamp = stream_key
+                        if current_time - last_frame_time > self.stream_timeout:
+                            logging.debug(
+                                f"Stream timeout detected for {device_id}/{timestamp}"
+                            )
+                            completed_streams.append((device_id, timestamp))
+                            self.build_video(device_id, timestamp)
+                            del self.active_streams[stream_key]
+
+            except Exception as e:
+                logging.debug(f"Error in monitor_streams: {e}")
+
+            time.sleep(1)
 
     def start(self):
         """Start the subscriber"""

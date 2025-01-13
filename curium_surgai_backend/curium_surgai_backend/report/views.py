@@ -1,57 +1,46 @@
 from rest_framework import status
+from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from django.shortcuts import get_object_or_404
+from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
-from .models import Report
+from .models import Video
 from .serializers import ReportSerializer
 
-# Report creation view - user can create a new report
-@swagger_auto_schema(
-    method="post",
-    request_body=ReportSerializer,
-    responses={201: ReportSerializer},
-)
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])  # Ensure only authenticated users can create reports
-def create_report(request):
-    if request.method == "POST":
+
+class ReportCreateView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="Create a report for a video",
+        request_body=ReportSerializer,
+        responses={
+            201: openapi.Response(
+                description="Report created successfully", schema=ReportSerializer
+            ),
+            400: "Bad Request",
+            401: "Unauthorized",
+            404: "Video not found",
+        },
+    )
+    def post(self, request):
+        # Add video validation to ensure user owns the video
+        video_id = request.data.get("video")
+        if video_id:
+            video = get_object_or_404(Video, video_id=video_id)
+            if video.uploaded_by != request.user:
+                return Response(
+                    {
+                        "error": "You don't have permission to create reports for this video"
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
         serializer = ReportSerializer(data=request.data)
-
-        # Ensure the data is valid
         if serializer.is_valid():
-            serializer.save()  # Save the report
+            serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-        else:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-# Report list view - user can get a list of all reports
-@swagger_auto_schema(
-    method="get",
-    responses={200: ReportSerializer},
-)
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])  # Ensure only authenticated users can view reports
-def get_reports(request):
-    reports = Report.objects.all()  # Retrieve all reports
-
-    # Serialize the reports and return them
-    serializer = ReportSerializer(reports, many=True)
-    return Response(serializer.data, status=status.HTTP_200_OK)
-
-# Report detail view - user can get details for a specific report by report_id
-@swagger_auto_schema(
-    method="get",
-    responses={200: ReportSerializer},
-)
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def get_report_detail(request, report_id):
-    try:
-        report = Report.objects.get(report_id=report_id)  # Retrieve report by UUID
-    except Report.DoesNotExist:
-        return Response({"detail": "Report not found."}, status=status.HTTP_404_NOT_FOUND)
-
-    # Serialize and return the report details
-    serializer = ReportSerializer(report)
-    return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

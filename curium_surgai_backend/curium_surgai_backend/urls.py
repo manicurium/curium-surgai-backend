@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.urls import path, include
-from .swagger.views import schema_view
+from swagger.views import schema_view
 
 
 urlpatterns = [
@@ -12,9 +12,10 @@ urlpatterns = [
     ),
     path("admin/", admin.site.urls),
     # REST framework
-    path("api/", include("curium_surgai_backend.video.urls")),
-    path("api/", include("curium_surgai_backend.frame.urls")),
-    path("api/", include("curium_surgai_backend.user.urls")),
-    path("api/", include("curium_surgai_backend.license.urls")),
-    path("api/", include("curium_surgai_backend.report.urls")),
+    path("api/", include("video.urls")),
+    path("api/", include("frame.urls")),
+    # path("api/", include("license.urls")),
+    path("api/", include("report.urls")),
+    path("api/", include("user.urls")),
+    path("api/", include("device.urls")),
 ]
