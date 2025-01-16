@@ -28,10 +28,6 @@ class LoginSignupView(APIView):
                 "email": openapi.Schema(
                     type=openapi.TYPE_STRING, format=openapi.FORMAT_EMAIL
                 ),
-                "username": openapi.Schema(
-                    type=openapi.TYPE_STRING,
-                    description="Optional username. If not provided, will use part before @ in email",
-                ),
             },
         ),
         responses={
