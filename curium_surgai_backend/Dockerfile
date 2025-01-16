@@ -7,7 +7,6 @@ COPY requirements.txt requirements.txt
 RUN pip3 install -r requirements.txt
 COPY  /curium_surgai_backend /curium_surgai_backend
 COPY manage.py /
-COPY /data /data
 EXPOSE 7050
 
 
