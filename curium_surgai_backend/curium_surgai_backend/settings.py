@@ -126,7 +126,7 @@ TEMPLATES = [
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("DB_NAME", default="curium_surgai_user"),
+        "NAME": os.getenv("DB_NAME", default="curium_surgai"),
         "USER": os.getenv("POSTGRES_USERNAME", default="postgres"),
         "PASSWORD": os.getenv("POSTGRES_PASSWORD", default="#Welcome123"),
         "HOST": os.getenv("POSTGRES_HOST", default="localhost"),

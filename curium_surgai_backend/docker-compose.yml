@@ -11,7 +11,32 @@ services:
       - ./mosquitto/log:/mosquitto/log:rw
     restart: unless-stopped
 
+  postgres:
+    container_name: postgres
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=#Welcome123
+    ports:
+      - '5432:5432'
+    volumes:
+      - db:/var/lib/postgresql/data
+
+
+  curium_surgai_backend:
+    container_name: curium_surgai_backend
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    image: public.ecr.aws/e7o5r8a5/curium_life_surgai_backend:1.0.0
+    environment:
+      - POSTGRES_HOST=postgres
+    ports:
+      - "7050:7050"
+
 volumes:
+  db:
+    driver: local
   config:
   data:
   log:
