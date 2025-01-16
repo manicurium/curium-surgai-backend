@@ -28,7 +28,7 @@ services:
     container_name: curium_surgai_backend
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    image: public.ecr.aws/e7o5r8a5/curium_life_surgai_backend:1.0.0
+    image: public.ecr.aws/e7o5r8a5/curium_life_surgai_backend:1.0.0-dev
     environment:
       - POSTGRES_HOST=postgres
     ports:

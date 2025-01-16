@@ -1,8 +1,6 @@
 FROM python:3.11-slim
 
-RUN apt-get update
-RUN apt-get install -y python3 python3-pip
-
+RUN apt-get update && apt-get install -y python3 python3-pip && apt-get install ffmpeg libsm6 libxext6  -y
 COPY requirements.txt requirements.txt
 RUN pip3 install -r requirements.txt
 COPY  /curium_surgai_backend /curium_surgai_backend
