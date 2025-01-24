@@ -10,6 +10,7 @@ from queue import Queue
 import time
 import logging
 from django.conf import settings
+import ssl
 
 logger = logging.getLogger()
 
@@ -89,8 +90,8 @@ class MultiDeviceVideoSubscriber:
             if rc == 0:
                 logging.debug("Connected to MQTT Broker!")
                 # Subscribe to both metadata and frame topics
-                client.subscribe(f"{self.topic}/+/+/metadata")
-                client.subscribe(f"{self.topic}/+/+/frame")
+                client.subscribe(f"{self.topic}/+/metadata")
+                client.subscribe(f"{self.topic}/+/frame")
             else:
                 logging.debug(f"Failed to connect, return code {rc}")
 
@@ -111,6 +112,15 @@ class MultiDeviceVideoSubscriber:
 
         if self.username and self.password:
             self.client.username_pw_set(self.username, self.password)
+
+        self.client.tls_set(
+            ca_certs="certificates/ca.crt",  # CA cert to verify server
+            certfile="certificates/device/client.crt",  # Client's certificate
+            keyfile="certificates/device/client.key",  # Client's private key
+            cert_reqs=ssl.CERT_REQUIRED,  # Verify server certificate
+            tls_version=ssl.PROTOCOL_TLSv1_2,  # Use TLS protocol
+        )  # Default cipher suite
+        self.client.tls_insecure_set(True)
 
         self.client.on_connect = on_connect
         self.client.on_message = on_message
