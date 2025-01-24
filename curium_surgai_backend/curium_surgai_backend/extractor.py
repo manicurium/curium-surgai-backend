@@ -54,7 +54,7 @@ class DeviceStreamTracker:
 class MultiDeviceVideoSubscriber:
     def __init__(
         self,
-        broker_address="localhost",
+        broker_address="127.0.0.1",
         broker_port=1883,
         topic="video/stream",
         stream_timeout=20,
