@@ -25,14 +25,15 @@ services:
       - '5432:5432'
     volumes:
       - db:/var/lib/postgresql/data
-      - ./certificates:/curium_surgai_backend/certificates:rw
 
 
   curium_surgai_backend:
     container_name: curium_surgai_backend
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    image: public.ecr.aws/e7o5r8a5/curium_life_surgai_backend:1.0.0-dev
+    image: public.ecr.aws/e7o5r8a5/curium_life_surgai_backend:1.1.0-dev
+    volumes:
+      - ./certificates:/curium_surgai_backend/certificates:rw
     environment:
       - POSTGRES_HOST=postgres
     ports:
