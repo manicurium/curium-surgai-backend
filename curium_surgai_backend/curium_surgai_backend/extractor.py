@@ -57,7 +57,7 @@ class MultiDeviceVideoSubscriber:
         broker_address="127.0.0.1",
         broker_port=1883,
         topic="video/stream",
-        stream_timeout=20,
+        stream_timeout=60,
         base_output_folder=os.path.join(settings.MEDIA_ROOT, "received_frames"),
         username=None,
         password=None,
