@@ -9,6 +9,9 @@ services:
       - ./mosquitto/config:/mosquitto/config:rw
       - ./mosquitto/data:/mosquitto/data:rw
       - ./mosquitto/log:/mosquitto/log:rw
+      - ./mosquitto/ca.crt:/etc/mosquitto/ca.crt:rw
+      - ./mosquitto/server.crt:/etc/mosquitto/server.crt:rw
+      - ./mosquitto/server.key:/etc/mosquitto/server.key:rw      
     restart: unless-stopped
 
   postgres:
@@ -22,6 +25,7 @@ services:
       - '5432:5432'
     volumes:
       - db:/var/lib/postgresql/data
+      - ./certificates:/curium_surgai_backend/certificates:rw
 
 
   curium_surgai_backend:
@@ -41,6 +45,6 @@ volumes:
   data:
   log:
 
-networks:
-  default:
-    name: mqtt5-network
+# networks:
+#   default:
+#     name: mqtt5-network
