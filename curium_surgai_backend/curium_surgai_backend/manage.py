@@ -19,7 +19,7 @@ def start_extractor():
     """Start the MultiDeviceVideoSubscriber in a background thread"""
     subscriber = MQTTVideoSubscriber(
         broker_address="azurecpu1.curium.life",
-        # broker_port=8883,
+        broker_port=1883,
         # topic="video/stream",
         # base_output_folder=os.path.join(settings.MEDIA_ROOT, "received_frames"),
         # username="admin",
