@@ -4,7 +4,7 @@ import os
 import sys
 
 import threading
-from surgai_listener import MQTTVideoSubscriber  # Import the extractor
+from surgai_listener import MQTTHandler
 from django.conf import settings
 import logging
 
@@ -17,7 +17,7 @@ logger.setLevel(logging.DEBUG)
 
 def start_extractor():
     """Start the MultiDeviceVideoSubscriber in a background thread"""
-    subscriber = MQTTVideoSubscriber(
+    subscriber = MQTTHandler(
         broker_address="azurecpu1.curium.life",
         broker_port=1883,
         # topic="video/stream",
