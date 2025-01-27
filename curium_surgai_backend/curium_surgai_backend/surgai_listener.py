@@ -9,8 +9,17 @@ import ssl
 from collections import defaultdict
 import json
 import requests
+from utils import S3Utils
+
 
 logger = logging.getLogger(__name__)
+
+s3util = S3Utils(
+    bucket_name=os.getenv("BUCKET_NAME"),
+    access_key=os.getenv("AWS_ACCESS_KEY_ID"),
+    secret_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+    region=os.getenv("AWS_REGION"),
+)
 
 
 class JSONStreamHandler:
@@ -76,7 +85,7 @@ class JSONStreamHandler:
                     all_data = json.load(f)
 
             # Read all temporary files
-            temp_files = [f for f in os.listdir(device_folder) if f.startswith("temp_")]
+            temp_files = [f for f in os.listdir(device_folder) if f.endswith(".json")]
             for temp_file in temp_files:
                 file_path = os.path.join(device_folder, temp_file)
                 try:
@@ -84,7 +93,7 @@ class JSONStreamHandler:
                         data = json.load(f)
                         all_data.append(data)
                     # Delete temp file after reading
-                    os.remove(file_path)
+                    # os.remove(file_path)
                 except Exception as e:
                     logger.error(f"Error processing temp file {file_path}: {e}")
                     continue
@@ -100,6 +109,12 @@ class JSONStreamHandler:
             logger.info(
                 f"Merged JSON files for device {device_id}, timestamp {timestamp}"
             )
+
+            logger.info("cleaning up temp json files ...")
+            for temp_file in temp_files:
+                file_path = os.path.join(device_folder, temp_file)
+                if not file_path.startswith("master"):
+                    os.remove(file_path)
 
         except Exception as e:
             logger.exception(f"Error merging JSON files: {e}")
@@ -201,12 +216,28 @@ class VideoStreamHandler:
                 frame_path = os.path.join(folder_path, frame_file)
                 frame = cv2.imread(frame_path)
                 out.write(frame)
-                if os.path.exists(frame_path):
-                    os.remove(frame_path)
+                # if os.path.exists(frame_path):
+                #     os.remove(frame_path)
 
             out.release()
+
+            s3util.upload_file(
+                file_location=output_path, key=output_path.replace("\\", "/")
+            )
+
+            url = s3util.generate_presigned_url(
+                object_key=output_path.replace("\\", "/"),
+                expiry=os.getenv("S3_SIGNED_URL_EXPIRY", 604800),
+            )
             logger.info(f"Video created at {output_path}")
-            self._update_video_table(device_id=device_id, video_path=output_path)
+
+            logger.info("cleaning up frames ...")
+            for frame_file in frames:
+                frame_path = os.path.join(folder_path, frame_file)
+                if not frame_path.endswith(".avi"):
+                    os.remove(frame_path)
+
+            self._update_video_table(device_id=device_id, video_path=url)
 
         except Exception as e:
             logger.exception(f"Error creating video: {e}")
@@ -252,7 +283,7 @@ class VideoStreamHandler:
             headers = {
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {token}",
-                "deviceid": device_id,
+                "device-id": device_id,
             }
             video_response = requests.post(
                 "http://127.0.0.1:7050/api/video",

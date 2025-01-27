@@ -21,7 +21,7 @@ class VideoSerializer(serializers.ModelSerializer):
         read_only_fields = ("video_id", "upload_date", "last_modified_date")
 
     def save(self):
-        device_id = self.context["request"].headers.get("deviceid")
+        device_id = self.context["request"].headers.get("device-id")
         device = Device.objects.get(device_id=device_id)
         exercise_type = self.validated_data.get("exercise_type", None)
         performer = self.validated_data.get("performer", None)
