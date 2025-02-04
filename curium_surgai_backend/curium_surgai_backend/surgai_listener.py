@@ -10,7 +10,8 @@ from collections import defaultdict
 import json
 import requests
 from utils import S3Utils
-
+import zlib
+import piexif
 
 logger = logging.getLogger(__name__)
 
@@ -20,133 +21,6 @@ s3util = S3Utils(
     secret_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
     region=os.getenv("AWS_REGION"),
 )
-
-
-class JSONStreamHandler:
-    def __init__(self, base_output_folder="received_json", batch_timeout=60):
-        self.base_output_folder = base_output_folder
-        self.batch_timeout = batch_timeout
-        self.json_buffer = defaultdict(
-            lambda: defaultdict(list)
-        )  # {device_id: {timestamp: [json_messages]}}
-        self.last_message_times = {}  # {(device_id, timestamp): last_message_time}
-        self.lock = threading.Lock()
-        self.running = True
-
-        os.makedirs(base_output_folder, exist_ok=True)
-        self.monitor_thread = threading.Thread(target=self._monitor_json_streams)
-        self.monitor_thread.start()
-
-    def handle_json(self, device_id, timestamp, json_data):
-        try:
-            with self.lock:
-                # Parse JSON data if it's in string format
-                if isinstance(json_data, (str, bytes)):
-                    json_data = json.loads(json_data)
-
-                # Add timestamp if not present
-                if "timestamp" not in json_data:
-                    json_data["timestamp"] = time.time()
-
-                # Create device/timestamp folder structure
-                device_folder = os.path.join(
-                    self.base_output_folder, device_id, timestamp
-                )
-                os.makedirs(device_folder, exist_ok=True)
-
-                # Get next sequence number for temp file
-                existing_temp_files = [
-                    f for f in os.listdir(device_folder) if f.startswith("temp_")
-                ]
-                next_seq = len(existing_temp_files) + 1
-                temp_file = os.path.join(device_folder, f"temp_{next_seq:04d}.json")
-                with open(temp_file, "w") as f:
-                    json.dump(json_data, f)
-
-                self.last_message_times[(device_id, timestamp)] = time.time()
-
-        except Exception as e:
-            logger.exception(f"Error handling JSON message: {e}")
-
-    def _merge_json_files(self, device_id, timestamp):
-        try:
-            device_folder = os.path.join(self.base_output_folder, device_id, timestamp)
-
-            if not os.path.exists(device_folder):
-                return
-
-            # Collect all JSON data
-            all_data = []
-
-            # First read master.json if it exists
-            master_file = os.path.join(device_folder, "master.json")
-            if os.path.exists(master_file):
-                with open(master_file, "r") as f:
-                    all_data = json.load(f)
-
-            # Read all temporary files
-            temp_files = [f for f in os.listdir(device_folder) if f.endswith(".json")]
-            for temp_file in temp_files:
-                file_path = os.path.join(device_folder, temp_file)
-                try:
-                    with open(file_path, "r") as f:
-                        data = json.load(f)
-                        all_data.append(data)
-                    # Delete temp file after reading
-                    # os.remove(file_path)
-                except Exception as e:
-                    logger.error(f"Error processing temp file {file_path}: {e}")
-                    continue
-
-            if all_data:
-                # Sort by timestamp
-                all_data.sort(key=lambda x: x.get("timestamp", 0))
-
-                # Write updated master file
-                with open(master_file, "w") as f:
-                    json.dump(all_data, f, indent=2)
-
-            logger.info(
-                f"Merged JSON files for device {device_id}, timestamp {timestamp}"
-            )
-
-            logger.info("cleaning up temp json files ...")
-            for temp_file in temp_files:
-                file_path = os.path.join(device_folder, temp_file)
-                if not file_path.startswith("master"):
-                    os.remove(file_path)
-
-        except Exception as e:
-            logger.exception(f"Error merging JSON files: {e}")
-
-    def _monitor_json_streams(self):
-        while self.running:
-            try:
-                current_time = time.time()
-                with self.lock:
-                    for (device_id, timestamp), last_time in list(
-                        self.last_message_times.items()
-                    ):
-                        if current_time - last_time > self.batch_timeout:
-                            self._merge_json_files(device_id, timestamp)
-                            del self.last_message_times[(device_id, timestamp)]
-
-            except Exception as e:
-                logger.error(f"Error monitoring JSON streams: {e}")
-
-            time.sleep(1)
-
-    def stop(self):
-        self.running = False
-        self.monitor_thread.join()
-
-    # def stop(self):
-    #     self.running = False
-    #     # Save any remaining data
-    #     for device_id in list(self.json_buffer.keys()):
-    #         for timestamp in list(self.json_buffer[device_id].keys()):
-    #             self._save_json_batch(device_id, timestamp)
-    #     self.monitor_thread.join()
 
 
 class VideoStreamHandler:
@@ -168,22 +42,52 @@ class VideoStreamHandler:
                 if timestamp not in self.frames_buffer[device_id]:
                     self.frames_buffer[device_id][timestamp] = 0
 
-                frame_count = self.frames_buffer[device_id][timestamp]
-                self.frames_buffer[device_id][timestamp] += 1
+                # Extract checksum and verify
+                # checksum = int.from_bytes(frame_data[:4], byteorder="big")
+                # frame_data = frame_data[4:]
 
-                # Save frame
+                # calculated_checksum = zlib.crc32(frame_data)
+                # if checksum != calculated_checksum:
+                #     logger.info(
+                #         f"Checksum mismatch! Expected {checksum}, got {calculated_checksum} "
+                #         f"for frame {self.frames_buffer[device_id][timestamp]} from device {device_id} "
+                #         f"at {timestamp}"
+                #     )
+                #     return
+
+                frame_count = self.frames_buffer[device_id][timestamp]
+
+                # Create output directory
                 device_folder = os.path.join(
                     self.base_output_folder, device_id, timestamp
                 )
                 os.makedirs(device_folder, exist_ok=True)
-                filename = f"frame_{frame_count:06d}.jpg"
+
+                # Base filename without extension
+                base_filename = f"frame_{frame_count:06d}"
+
+                # Extract EXIF metadata
+                try:
+                    exif_dict = piexif.load(frame_data)
+                    metadata_bytes = exif_dict["Exif"][piexif.ExifIFD.UserComment]
+                    metadata = json.loads(metadata_bytes.decode("utf-8"))
+
+                    # Save metadata to JSON file
+                    with open(
+                        os.path.join(device_folder, f"{base_filename}.json"), "w"
+                    ) as f:
+                        json.dump(metadata, f, indent=4)
+                except Exception as e:
+                    logger.warning(f"Failed to extract or save metadata: {e}")
+
+                # Save frame
                 frame = cv2.imdecode(
                     np.frombuffer(frame_data, dtype=np.uint8), cv2.IMREAD_COLOR
                 )
-                cv2.imwrite(os.path.join(device_folder, filename), frame)
+                cv2.imwrite(os.path.join(device_folder, f"{base_filename}.jpg"), frame)
 
+                self.frames_buffer[device_id][timestamp] += 1
                 self.last_frame_times[(device_id, timestamp)] = time.time()
-
         except Exception as e:
             logger.exception(f"Error handling frame: {e}")
 
@@ -246,6 +150,57 @@ class VideoStreamHandler:
             del self.frames_buffer[device_id][timestamp]
             del self.last_frame_times[(device_id, timestamp)]
 
+    def _merge_json_files(self, device_id, timestamp):
+        try:
+            device_folder = os.path.join(self.base_output_folder, device_id, timestamp)
+
+            if not os.path.exists(device_folder):
+                return
+
+            # Collect all JSON data
+            all_data = []
+
+            # First read master.json if it exists
+            master_file = os.path.join(device_folder, "master.json")
+            if os.path.exists(master_file):
+                with open(master_file, "r") as f:
+                    all_data = json.load(f)
+
+            # Read all temporary files
+            temp_files = [f for f in os.listdir(device_folder) if f.endswith(".json")]
+            for temp_file in temp_files:
+                file_path = os.path.join(device_folder, temp_file)
+                try:
+                    with open(file_path, "r") as f:
+                        data = json.load(f)
+                        all_data.append(data)
+                    # Delete temp file after reading
+                    # os.remove(file_path)
+                except Exception as e:
+                    logger.error(f"Error processing temp file {file_path}: {e}")
+                    continue
+
+            if all_data:
+                # Sort by timestamp
+                all_data.sort(key=lambda x: x.get("timestamp", 0))
+
+                # Write updated master file
+                with open(master_file, "w") as f:
+                    json.dump(all_data, f, indent=2)
+
+            logger.info(
+                f"Merged JSON files for device {device_id}, timestamp {timestamp}"
+            )
+
+            logger.info("cleaning up temp json files ...")
+            for temp_file in temp_files:
+                file_path = os.path.join(device_folder, temp_file)
+                if not file_path.startswith("master"):
+                    os.remove(file_path)
+
+        except Exception as e:
+            logger.exception(f"Error merging JSON files: {e}")
+
     def _monitor_streams(self):
         while self.running:
             try:
@@ -256,6 +211,7 @@ class VideoStreamHandler:
                     ):
                         if current_time - last_time > self.stream_timeout:
                             self._create_video(device_id, timestamp)
+                            self._merge_json_files(device_id, timestamp)
 
             except Exception as e:
                 logger.error(f"Error monitoring streams: {e}")
@@ -311,7 +267,6 @@ class MQTTHandler:
         password="letmein",
     ):
         self.video_handler = VideoStreamHandler()
-        self.json_handler = JSONStreamHandler()
         self.client = mqtt_client.Client()
         self.broker_address = broker_address
         self.broker_port = broker_port
@@ -338,7 +293,6 @@ class MQTTHandler:
                 logger.info("Connected to MQTT broker")
                 # Subscribe to both video frame and JSON topics
                 client.subscribe("video/stream/+/+/frame")
-                client.subscribe("video/stream/+/+/json")
             else:
                 logger.error(f"Connection failed with code {rc}")
 
@@ -351,8 +305,7 @@ class MQTTHandler:
 
                 if message_type == "frame":
                     self.video_handler.handle_frame(device_id, timestamp, msg.payload)
-                elif message_type == "json":
-                    self.json_handler.handle_json(device_id, timestamp, msg.payload)
+
             except Exception as e:
                 logger.error(f"Error processing message: {e}")
 
@@ -371,6 +324,5 @@ class MQTTHandler:
 
     def stop(self):
         self.video_handler.stop()
-        self.json_handler.stop()
         self.client.loop_stop()
         self.client.disconnect()
