@@ -12,6 +12,8 @@ import requests
 from utils import S3Utils
 import zlib
 import piexif
+from PIL import Image
+import io
 
 logger = logging.getLogger(__name__)
 
@@ -65,10 +67,11 @@ class VideoStreamHandler:
 
                 # Base filename without extension
                 base_filename = f"frame_{frame_count:06d}"
-
+                image = Image.open(io.BytesIO(frame_data))
                 # Extract EXIF metadata
                 try:
                     exif_dict = piexif.load(frame_data)
+                    # logger.info(f"exif data {exif_dict}")
                     metadata_bytes = exif_dict["Exif"][piexif.ExifIFD.UserComment]
                     metadata = json.loads(metadata_bytes.decode("utf-8"))
 
@@ -81,10 +84,15 @@ class VideoStreamHandler:
                     logger.warning(f"Failed to extract or save metadata: {e}")
 
                 # Save frame
-                frame = cv2.imdecode(
-                    np.frombuffer(frame_data, dtype=np.uint8), cv2.IMREAD_COLOR
+                # frame = cv2.imdecode(
+                #     np.frombuffer(frame_data, dtype=np.uint8), cv2.IMREAD_COLOR
+                # )
+                # cv2.imwrite(os.path.join(device_folder, f"{base_filename}.jpg"), frame)
+                image.save(
+                    os.path.join(device_folder, f"{base_filename}.jpg"),
+                    "JPEG",
+                    exif=image.info["exif"],
                 )
-                cv2.imwrite(os.path.join(device_folder, f"{base_filename}.jpg"), frame)
 
                 self.frames_buffer[device_id][timestamp] += 1
                 self.last_frame_times[(device_id, timestamp)] = time.time()
