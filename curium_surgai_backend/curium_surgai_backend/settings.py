@@ -47,13 +47,17 @@ LOGGING = {
     },
     "root": {
         "handlers": ["console"],
-        "level": "WARNING",
+        "level": "INFO",
     },
     "loggers": {
         "django": {
             "handlers": ["console"],
             "level": os.getenv("DJANGO_LOG_LEVEL", "INFO"),
             "propagate": False,
+        },
+        "": {
+            "handlers": ["console"],
+            "level": "DEBUG",
         },
     },
 }

@@ -34,6 +34,7 @@ services:
     image: public.ecr.aws/e7o5r8a5/curium_life_surgai_backend:1.1.0-dev
     volumes:
       - ./certificates:/curium_surgai_backend/certificates:rw
+      - ./received_frames:/curium_surgai_backend/received_frames:rw
     environment:
       - POSTGRES_HOST=postgres
     ports:
