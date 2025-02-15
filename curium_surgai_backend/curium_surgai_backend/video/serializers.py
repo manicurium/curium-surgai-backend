@@ -27,12 +27,12 @@ class VideoSerializer(serializers.ModelSerializer):
         performer = self.validated_data.get("performer", None)
         retain = self.validated_data.get("retain", False)
         video_path = self.validated_data.get("video_path", None)
-        volume = Video(
+        video = Video(
             uploaded_by=device,
             exercise_type=exercise_type,
             performer=performer,
             retain=retain,
             video_path=video_path,
         )
-        volume.save()
-        return volume
+        video.save()
+        return video

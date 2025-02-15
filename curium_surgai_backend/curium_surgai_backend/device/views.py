@@ -10,57 +10,6 @@ from drf_yasg import openapi
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
 
-@swagger_auto_schema(
-    method="post",
-    operation_description="Start streaming for a specific device",
-    request_body=openapi.Schema(
-        type=openapi.TYPE_OBJECT,
-        required=["mac_address"],
-        properties={
-            "mac_address": openapi.Schema(
-                type=openapi.TYPE_STRING, description="MAC address of the device"
-            )
-        },
-    ),
-    responses={
-        200: openapi.Response(
-            description="Stream started successfully",
-            schema=openapi.Schema(
-                type=openapi.TYPE_OBJECT,
-                properties={
-                    "mqtt_topic": openapi.Schema(
-                        type=openapi.TYPE_STRING,
-                        description="MQTT topic for the device",
-                    )
-                },
-            ),
-        ),
-        404: openapi.Response(
-            description="Device not found",
-            schema=openapi.Schema(
-                type=openapi.TYPE_OBJECT,
-                properties={
-                    "error": openapi.Schema(
-                        type=openapi.TYPE_STRING, description="Error message"
-                    )
-                },
-            ),
-        ),
-        401: "Unauthorized",
-    },
-    tags=["Devices"],
-)
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
-def start_stream(request):
-    device_id = request.data.get("mac_address")
-    try:
-        device = Device.objects.get(mac_address=device_id)
-        return Response({"mqtt_topic": device.mqtt_topic})
-    except Device.DoesNotExist:
-        return Response({"error": "Device not found"}, status=status.HTTP_404_NOT_FOUND)
-
-
 class DeviceCreateView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]

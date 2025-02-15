@@ -13,7 +13,7 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 from pathlib import Path
 from datetime import timedelta
 import os
-
+from django.core.asgi import get_asgi_application
 from corsheaders.defaults import default_headers
 
 SECRET_KEY = "django-insecure-nma=xi6x2p-crjg^ifqqkapyu1qjd0l=+wn)-rijk_o%$!k3w_"
@@ -26,7 +26,7 @@ TIME_ZONE = "UTC"
 ALLOWED_HOSTS = ["*"]
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
@@ -148,7 +148,7 @@ REST_FRAMEWORK = {
 
 AUTH_USER_MODEL = "user.User"
 
-MEDIA_ROOT = "data/"
+MEDIA_ROOT = "received_frames/"
 
 # Email settings
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
@@ -158,3 +158,9 @@ EMAIL_USE_TLS = True
 EMAIL_HOST_USER = "reports@curium.life"
 EMAIL_HOST_PASSWORD = "Cur@2023!"
 DEFAULT_FROM_EMAIL = "reports@curium.life"
+application = get_asgi_application()
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+    }
+}

@@ -8,6 +8,7 @@ class Report(models.Model):
     video = models.ForeignKey(Video, on_delete=models.CASCADE, related_name="reports")
     report_date = models.DateTimeField(auto_now_add=True)
     report_json = models.JSONField()  # Use models.JSONField for Django 3.1+
+    score = models.JSONField(blank=True)
 
     class Meta:
         db_table = "surgai_report"

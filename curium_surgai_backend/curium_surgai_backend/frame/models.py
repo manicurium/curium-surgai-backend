@@ -7,10 +7,18 @@ class ProcessedFrame(models.Model):
     processed_frame_id = models.UUIDField(
         primary_key=True, default=uuid.uuid4, editable=False
     )
-    video = models.ForeignKey(
-        Video, on_delete=models.CASCADE, related_name="processed_frames"
+    device_id = models.ForeignKey(
+        "device.Device",
+        on_delete=models.CASCADE,
+        related_name="uploaded_frame",
     )
-    collated_json = models.JSONField()  # Use models.JSONField for Django 3.1+
+    frame_number = models.IntegerField()
+    frame_path = models.CharField(max_length=255)
+    json_path = models.CharField(max_length=255)
+    processed_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = "surgai_frame"
+        ordering = ["frame_number"]
+        # Ensure unique frame numbers per device
+        unique_together = ["device_id", "frame_number"]

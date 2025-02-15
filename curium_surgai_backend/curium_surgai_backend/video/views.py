@@ -48,7 +48,7 @@ class VideoCreateView(APIView):
         operation_description="Get all videos uploaded by a specific device",
         manual_parameters=[
             openapi.Parameter(
-                "Device-ID",
+                "device-id",
                 openapi.IN_HEADER,
                 description="Unique identifier for the device (must be a valid UUID)",
                 type=openapi.TYPE_STRING,
@@ -61,16 +61,16 @@ class VideoCreateView(APIView):
                 description="List of videos retrieved successfully",
                 schema=VideoSerializer(many=True),
             ),
-            400: "Bad Request - Invalid or missing Device-ID",
+            400: "Bad Request - Invalid or missing device-id",
             401: "Unauthorized",
         },
     )
     def get(self, request):
-        device_id = request.headers.get("Device-ID")
+        device_id = request.headers.get("device-id")
 
         if not device_id:
             return Response(
-                {"error": "Device-ID header is required"},
+                {"error": "device-id header is required"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -78,7 +78,7 @@ class VideoCreateView(APIView):
         valid_uuid = self.validate_uuid(device_id)
         if not valid_uuid:
             return Response(
-                {"error": "Invalid Device-ID format. Must be a valid UUID."},
+                {"error": "Invalid device-id format. Must be a valid UUID."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
