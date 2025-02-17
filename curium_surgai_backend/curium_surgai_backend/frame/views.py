@@ -321,7 +321,7 @@ class VideoProcessingThread(threading.Thread):
                 "outcome.avi",
             )
             fourcc = cv2.VideoWriter_fourcc("F", "M", "P", "4")
-            out = cv2.VideoWriter(output_path, fourcc, 30.0, (width, height))
+            out = cv2.VideoWriter(output_path, fourcc, 10.0, (width, height))
 
             # Add frames to video
             for frame_file in frames:
