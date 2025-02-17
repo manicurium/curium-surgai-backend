@@ -11,7 +11,6 @@ import json
 import os
 import uuid
 from PIL import Image
-from PIL.ExifTags import TAGS
 import cv2
 from video.serializers import VideoSerializer
 from report.serializers import ReportSerializer
@@ -21,7 +20,7 @@ from django.db import transaction
 from django.core.cache import cache
 import logging
 from utils import S3Utils
-
+import piexif
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -53,40 +52,41 @@ class ProcessedFrameCreateView(APIView):
         frame_dir = os.path.join(
             settings.MEDIA_ROOT, str(device_id), str(session_id), "frames"
         )
-        os.makedirs(frame_dir, exist_ok=True)
-
-        image = Image.open(frame_file)
-        exif = image._getexif()
-        json_data = None
-        for tag_id in exif:
-            tag = TAGS.get(tag_id, tag_id)
-            if tag == "UserComment":
-                json_data = json.loads(exif[tag_id])
-                break
         json_dir = os.path.join(
             settings.MEDIA_ROOT, str(device_id), str(session_id), "json"
         )
+        os.makedirs(frame_dir, exist_ok=True)
+        os.makedirs(json_dir, exist_ok=True)
+
+        # Open image and extract EXIF metadata
+        image = Image.open(frame_file)
+        json_data = None
+        try:
+            exif_dict = piexif.load(image.info.get("exif", b""))
+            logger.info(f"Extracted EXIF Data: {exif_dict}")
+            user_comment = exif_dict["Exif"].get(piexif.ExifIFD.UserComment)
+            if user_comment:
+                try:
+                    json_data = json.loads(user_comment.decode("utf-8"))
+                except UnicodeDecodeError:
+                    json_data = json.loads(user_comment.decode("utf-16"))
+        except (KeyError, ValueError, json.JSONDecodeError):
+            pass
+
+        if not json_data:
+            raise ValueError("No valid EXIF metadata found in image.")
+
+        # Extract frame number
         frame_number = json_data.get("frame_number")
+        if frame_number is None:
+            raise ValueError("Frame number missing in metadata.")
+
         # Save frame image
         frame_filename = f"frame_{frame_number}.jpg"
         frame_path = os.path.join(frame_dir, frame_filename)
-        with open(frame_path, "wb+") as destination:
-            for chunk in frame_file.chunks():
-                destination.write(chunk)
+        image.save(frame_path, "JPEG", exif=image.info.get("exif"))
 
-        # Extract and save JSON
-        # image = Image.open(frame_file)
-        # exif = image._getexif()
-        # json_data = None
-        # for tag_id in exif:
-        #     tag = TAGS.get(tag_id, tag_id)
-        #     if tag == "UserComment":
-        #         json_data = json.loads(exif[tag_id])
-        #         break
-        # json_dir = os.path.join(
-        #     settings.MEDIA_ROOT, str(device_id), str(session_id), "json"
-        # )
-        os.makedirs(json_dir, exist_ok=True)
+        # Save JSON metadata
         json_filename = f"frame_{frame_number}.json"
         json_path = os.path.join(json_dir, json_filename)
         with open(json_path, "w") as json_file:
