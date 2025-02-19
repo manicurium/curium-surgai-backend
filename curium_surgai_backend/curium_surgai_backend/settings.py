@@ -40,28 +40,50 @@ SIMPLE_JWT = {
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "{levelname} {asctime} {module} {process:d} {thread:d} {message}",
+            "style": "{",
+        },
+        "simple": {
+            "format": "[{asctime}] {levelname} {message}",
+            "style": "{",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+        },
+    },
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
+            "formatter": "simple",
         },
-    },
-    "root": {
-        "handlers": ["console"],
-        "level": "INFO",
+        "file": {
+            "class": "logging.FileHandler",
+            "filename": "debug.log",
+            "formatter": "verbose",
+        },
     },
     "loggers": {
+        "": {  # Root logger
+            "handlers": ["console"],
+            "level": "INFO",
+        },
         "django": {
             "handlers": ["console"],
-            "level": os.getenv("DJANGO_LOG_LEVEL", "INFO"),
+            "level": "INFO",
             "propagate": False,
         },
-        "": {
+        "django.db.backends": {
             "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "core": {  # Your app's logger
+            "handlers": ["console", "file"],
             "level": "DEBUG",
+            "propagate": False,
         },
     },
 }
-
 STATIC_URL = "static/"
 
 
