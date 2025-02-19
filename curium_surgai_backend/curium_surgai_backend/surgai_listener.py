@@ -63,7 +63,7 @@ class VideoStreamHandler:
                 device_folder = os.path.join(
                     self.base_output_folder, device_id, timestamp
                 )
-                os.makedirs(device_folder, exist_ok=True)
+                os.makedirs(os.path.join(device_folder, "json"), exist_ok=True)
 
                 # Base filename without extension
                 base_filename = f"frame_{frame_count:06d}"
@@ -77,7 +77,8 @@ class VideoStreamHandler:
 
                     # Save metadata to JSON file
                     with open(
-                        os.path.join(device_folder, f"{base_filename}.json"), "w"
+                        os.path.join(device_folder, "json", f"{base_filename}.json"),
+                        "w",
                     ) as f:
                         json.dump(metadata, f, indent=4)
                 except Exception as e:
@@ -88,8 +89,10 @@ class VideoStreamHandler:
                 #     np.frombuffer(frame_data, dtype=np.uint8), cv2.IMREAD_COLOR
                 # )
                 # cv2.imwrite(os.path.join(device_folder, f"{base_filename}.jpg"), frame)
+
+                os.makedirs(os.path.join(device_folder, "frames"), exist_ok=True)
                 image.save(
-                    os.path.join(device_folder, f"{base_filename}.jpg"),
+                    os.path.join(device_folder, "frames", f"{base_filename}.jpg"),
                     "JPEG",
                     exif=image.info["exif"],
                 )
@@ -218,8 +221,9 @@ class VideoStreamHandler:
                         self.last_frame_times.items()
                     ):
                         if current_time - last_time > self.stream_timeout:
-                            self._create_video(device_id, timestamp)
-                            self._merge_json_files(device_id, timestamp)
+                            # self._create_video(device_id, timestamp)
+                            # self._merge_json_files(device_id, timestamp)
+                            logger.info("stream timeout after 60 seconds")
 
             except Exception as e:
                 logger.error(f"Error monitoring streams: {e}")
@@ -230,7 +234,7 @@ class VideoStreamHandler:
         try:
             # fetch functional token
             # create video
-            request_body = {"email": "functional_user@curium.life", "otp": "1236"}
+            request_body = {"email": "functional_user@curium.life", "otp": "1234"}
             response = requests.post(
                 "http://127.0.0.1:7050/api/auth/verify",
                 json=request_body,
