@@ -35,8 +35,8 @@ class VideoStreamHandler:
         self.running = True
 
         os.makedirs(base_output_folder, exist_ok=True)
-        self.monitor_thread = threading.Thread(target=self._monitor_streams)
-        self.monitor_thread.start()
+        # self.monitor_thread = threading.Thread(target=self._monitor_streams)
+        # self.monitor_thread.start()
 
     def handle_frame(self, device_id, timestamp, frame_data):
         try:
@@ -266,7 +266,7 @@ class VideoStreamHandler:
 
     def stop(self):
         self.running = False
-        self.monitor_thread.join()
+        # self.monitor_thread.join()
 
 
 class MQTTHandler:
