@@ -12,8 +12,8 @@ import requests
 from utils import S3Utils
 import zlib
 import piexif
-from PIL import Image
 import io
+from PIL import Image
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +99,12 @@ class VideoStreamHandler:
 
                 self.frames_buffer[device_id][timestamp] += 1
                 self.last_frame_times[(device_id, timestamp)] = time.time()
+        except Image.UnidentifiedImageError as ex:
+            logger.info(f"Frame data length: {len(frame_data)}")
+            logger.info(
+                f"First few bytes: {frame_data[:20]}"
+            )  # Print start of data for debugging
+            logger.error(ex)
         except Exception as e:
             logger.exception(f"Error handling frame: {e}")
 
