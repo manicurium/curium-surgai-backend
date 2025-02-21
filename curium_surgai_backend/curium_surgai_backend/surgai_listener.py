@@ -14,6 +14,7 @@ import zlib
 import piexif
 import io
 from PIL import Image
+import base64
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +69,7 @@ class VideoStreamHandler:
                 # Base filename without extension
                 base_filename = f"frame_{frame_count:06d}"
                 image = Image.open(io.BytesIO(frame_data))
+
                 # Extract EXIF metadata
                 try:
                     exif_dict = piexif.load(frame_data)
@@ -101,10 +103,88 @@ class VideoStreamHandler:
                 self.last_frame_times[(device_id, timestamp)] = time.time()
         except Image.UnidentifiedImageError as ex:
             logger.info(f"Frame data length: {len(frame_data)}")
-            logger.info(
-                f"First few bytes: {frame_data[:20]}"
-            )  # Print start of data for debugging
+            logger.info(f"First few bytes: {frame_data[:20]}")
             logger.error(ex)
+        except Exception as e:
+            logger.exception(f"Error handling frame: {e}")
+
+    def handle_frame_base64(self, device_id, timestamp, frame_data_base64):
+        try:
+            with self.lock:
+                if timestamp not in self.frames_buffer[device_id]:
+                    self.frames_buffer[device_id][timestamp] = 0
+
+                # Decode base64 data
+                try:
+                    frame_data = base64.b64decode(frame_data_base64)
+                except Exception as e:
+                    logger.error(f"Failed to decode base64 data: {e}")
+                    return
+
+                frame_count = self.frames_buffer[device_id][timestamp]
+
+                # Create output directory
+                device_folder = os.path.join(
+                    self.base_output_folder, device_id, timestamp
+                )
+                os.makedirs(os.path.join(device_folder, "json"), exist_ok=True)
+
+                # Base filename without extension
+                base_filename = f"frame_{frame_count:06d}"
+
+                try:
+                    # Create BytesIO object from decoded data
+                    image_bytes = io.BytesIO(frame_data)
+                    image = Image.open(image_bytes)
+
+                    # Extract EXIF metadata
+                    try:
+                        exif_dict = piexif.load(frame_data)
+                        metadata_bytes = exif_dict["Exif"][piexif.ExifIFD.UserComment]
+                        metadata = json.loads(metadata_bytes.decode("utf-8"))
+
+                        # Save metadata to JSON file
+                        with open(
+                            os.path.join(
+                                device_folder, "json", f"{base_filename}.json"
+                            ),
+                            "w",
+                        ) as f:
+                            json.dump(metadata, f, indent=4)
+                    except Exception as e:
+                        logger.warning(f"Failed to extract or save metadata: {e}")
+
+                    # Create frames directory and save image
+                    os.makedirs(os.path.join(device_folder, "frames"), exist_ok=True)
+
+                    # Save image with EXIF data if available
+                    if "exif" in image.info:
+                        image.save(
+                            os.path.join(
+                                device_folder, "frames", f"{base_filename}.jpg"
+                            ),
+                            "JPEG",
+                            exif=image.info["exif"],
+                        )
+                    else:
+                        image.save(
+                            os.path.join(
+                                device_folder, "frames", f"{base_filename}.jpg"
+                            ),
+                            "JPEG",
+                        )
+
+                    self.frames_buffer[device_id][timestamp] += 1
+                    self.last_frame_times[(device_id, timestamp)] = time.time()
+
+                except Image.UnidentifiedImageError as ex:
+                    logger.info(f"Frame data length: {len(frame_data)}")
+                    logger.info(f"First few bytes: {frame_data[:20]}")
+                    logger.error(ex)
+                finally:
+                    if "image_bytes" in locals():
+                        image_bytes.close()
+
         except Exception as e:
             logger.exception(f"Error handling frame: {e}")
 
@@ -322,7 +402,9 @@ class MQTTHandler:
                 message_type = parts[4]
 
                 if message_type == "frame":
-                    self.video_handler.handle_frame(device_id, timestamp, msg.payload)
+                    self.video_handler.handle_frame_base64(
+                        device_id, timestamp, msg.payload
+                    )
 
             except Exception as e:
                 logger.error(f"Error processing message: {e}")
