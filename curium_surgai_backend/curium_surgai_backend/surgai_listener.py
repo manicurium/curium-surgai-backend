@@ -84,7 +84,8 @@ class VideoStreamHandler:
                     ) as f:
                         json.dump(metadata, f, indent=4)
                 except Exception as e:
-                    logger.warning(f"Failed to extract or save metadata: {e}")
+                    logger.exception(e)
+                    # logger.warning(f"Failed to extract or save metadata: {e}")
 
                 # Save frame
                 # frame = cv2.imdecode(
