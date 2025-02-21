@@ -153,7 +153,8 @@ class VideoStreamHandler:
                         ) as f:
                             json.dump(metadata, f, indent=4)
                     except Exception as e:
-                        logger.warning(f"Failed to extract or save metadata: {e}")
+                        logger.exception(e)
+                        # logger.warning(f"Failed to extract or save metadata: {e}")
 
                     # Create frames directory and save image
                     os.makedirs(os.path.join(device_folder, "frames"), exist_ok=True)
