@@ -186,3 +186,9 @@ CACHES = {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
     }
 }
+
+DATA_UPLOAD_MAX_MEMORY_SIZE = 1000 * 1024 * 1024  # 1000MB in bytes
+
+# Media settings
+MEDIA_URL = "/media/"
+MEDIA_ROOT = os.path.join(MEDIA_ROOT, "media")
