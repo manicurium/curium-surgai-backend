@@ -21,7 +21,7 @@ def start_extractor():
         broker_address="azurecpu1.curium.life",
         broker_port=1883,
         # topic="video/stream",
-        # base_output_folder=os.path.join(settings.MEDIA_ROOT, "received_frames"),
+        base_output_folder=os.path.join(settings.MEDIA_ROOT),
         # username="admin",
         # password="letmein",
     )
