@@ -177,9 +177,9 @@ EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 EMAIL_HOST = "smtp.gmail.com"
 EMAIL_PORT = 465
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = "reports@curium.life"
-EMAIL_HOST_PASSWORD = "Cur@2023!"
-DEFAULT_FROM_EMAIL = "reports@curium.life"
+EMAIL_HOST_USER = ""
+EMAIL_HOST_PASSWORD = ""
+DEFAULT_FROM_EMAIL = ""
 application = get_asgi_application()
 CACHES = {
     "default": {
