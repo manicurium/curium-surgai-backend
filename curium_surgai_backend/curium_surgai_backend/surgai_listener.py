@@ -125,11 +125,25 @@ class VideoStreamHandler:
                 base_filename = f"frame_{frame_number:06d}"
 
                 try:
-                    # Create BytesIO object from decoded data
+                    # Look for JPEG signature in the data
+                    jpeg_signature = b"\xff\xd8\xff"
+                    signature_pos = frame_data.find(jpeg_signature)
+
+                    if signature_pos > 0:
+                        # Found signature not at the beginning, extract only the JPEG data
+                        logger.info(
+                            f"Found JPEG signature at position {signature_pos}, stripping prefix bytes"
+                        )
+                        frame_data = frame_data[signature_pos:]
+                    elif signature_pos == -1:
+                        logger.warning("JPEG signature not found in data")
+
+                    # Create BytesIO object from adjusted data
                     image_bytes = io.BytesIO(frame_data)
                     image = Image.open(image_bytes)
 
                     # Extract EXIF metadata
+                    metadata = None
                     try:
                         exif_dict = piexif.load(frame_data)
                         metadata_bytes = exif_dict["Exif"][piexif.ExifIFD.UserComment]
@@ -144,45 +158,51 @@ class VideoStreamHandler:
                                 f"Frame number mismatch: metadata={metadata['frame_number']}, expected={frame_number}"
                             )
                             metadata["frame_number"] = frame_number
-
-                        # Save metadata to JSON file
-                        with open(
-                            os.path.join(
-                                device_folder, "json", f"{base_filename}.json"
-                            ),
-                            "w",
-                        ) as f:
-                            json.dump(metadata, f, indent=4)
                     except Exception as e:
                         # Create simple metadata if extraction fails
                         logger.warning(
                             f"Failed to extract metadata: {e}, creating basic metadata"
                         )
+
+                    # Always create metadata (whether it was extracted or not)
+                    if metadata is None:
                         metadata = {
                             "frame_number": frame_number,
                             "timestamp": time.time(),
                         }
-                        with open(
-                            os.path.join(
-                                device_folder, "json", f"{base_filename}.json"
-                            ),
-                            "w",
-                        ) as f:
-                            json.dump(metadata, f, indent=4)
+
+                    # Save metadata to JSON file
+                    with open(
+                        os.path.join(device_folder, "json", f"{base_filename}.json"),
+                        "w",
+                    ) as f:
+                        json.dump(metadata, f, indent=4)
 
                     # Create frames directory and save image
                     os.makedirs(os.path.join(device_folder, "frames"), exist_ok=True)
 
-                    # Save image with EXIF data if available
-                    if "exif" in image.info:
-                        image.save(
-                            os.path.join(
-                                device_folder, "frames", f"{base_filename}.jpg"
-                            ),
-                            "JPEG",
-                            exif=image.info["exif"],
+                    # Save image (try to preserve EXIF if available)
+                    try:
+                        if "exif" in image.info:
+                            image.save(
+                                os.path.join(
+                                    device_folder, "frames", f"{base_filename}.jpg"
+                                ),
+                                "JPEG",
+                                exif=image.info["exif"],
+                            )
+                        else:
+                            image.save(
+                                os.path.join(
+                                    device_folder, "frames", f"{base_filename}.jpg"
+                                ),
+                                "JPEG",
+                            )
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to save with EXIF: {e}, saving without EXIF"
                         )
-                    else:
+                        # Try again without EXIF if saving with EXIF fails
                         image.save(
                             os.path.join(
                                 device_folder, "frames", f"{base_filename}.jpg"
@@ -204,7 +224,56 @@ class VideoStreamHandler:
                 except Image.UnidentifiedImageError as ex:
                     logger.info(f"Frame data length: {len(frame_data)}")
                     logger.info(f"First few bytes: {frame_data[:20]}")
-                    logger.error(ex)
+
+                    # As a last resort, try to find another format signature
+                    try:
+                        # Try looking for alternative image signatures and retry
+                        retry_success = False
+
+                        # Try with the larger JPEG signature
+                        jpeg_full_signature = b"\xff\xd8\xff\xe0\x00\x10JFIF"
+                        signature_pos = frame_data.find(jpeg_full_signature)
+                        if signature_pos > 0:
+                            # Try again with more precise signature
+                            retry_data = frame_data[signature_pos:]
+                            image_bytes = io.BytesIO(retry_data)
+                            image = Image.open(image_bytes)
+
+                            # Save image directly without EXIF
+                            os.makedirs(
+                                os.path.join(device_folder, "frames"), exist_ok=True
+                            )
+                            image.save(
+                                os.path.join(
+                                    device_folder, "frames", f"{base_filename}.jpg"
+                                ),
+                                "JPEG",
+                            )
+
+                            # Create basic metadata
+                            metadata = {
+                                "frame_number": frame_number,
+                                "timestamp": time.time(),
+                            }
+                            with open(
+                                os.path.join(
+                                    device_folder, "json", f"{base_filename}.json"
+                                ),
+                                "w",
+                            ) as f:
+                                json.dump(metadata, f, indent=4)
+
+                            logger.info(
+                                f"Successfully recovered frame with full JPEG signature detection"
+                            )
+                            retry_success = True
+
+                        if not retry_success:
+                            logger.error(f"Could not recover image data: {ex}")
+
+                    except Exception as retry_ex:
+                        logger.error(f"Recovery attempt failed: {retry_ex}")
+
                 finally:
                     if "image_bytes" in locals():
                         image_bytes.close()
