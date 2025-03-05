@@ -98,9 +98,23 @@ class VideoStreamHandler:
 
                 # Decode base64 data
                 try:
-                    frame_data = base64.b64decode(frame_data_base64)
+                    # If it's already binary data, don't try to decode it
+                    if isinstance(frame_data_base64, bytes):
+                        frame_data = frame_data_base64
+                    else:
+                        # Ensure proper padding for base64
+                        if isinstance(frame_data_base64, str):
+                            # Add padding if necessary
+                            padding_needed = len(frame_data_base64) % 4
+                            if padding_needed > 0:
+                                frame_data_base64 += "=" * (4 - padding_needed)
+
+                        frame_data = base64.b64decode(frame_data_base64)
                 except Exception as e:
                     logger.error(f"Failed to decode base64 data: {e}")
+                    logger.error(
+                        f"Data type: {type(frame_data_base64)}, First 20 chars: {str(frame_data_base64)[:20]}"
+                    )
                     return
 
                 # Use provided frame_number if given, otherwise use counter
@@ -142,73 +156,31 @@ class VideoStreamHandler:
                     image_bytes = io.BytesIO(frame_data)
                     image = Image.open(image_bytes)
 
-                    # Extract EXIF metadata
-                    metadata = None
-                    try:
-                        exif_dict = piexif.load(frame_data)
-                        metadata_bytes = exif_dict["Exif"][piexif.ExifIFD.UserComment]
-                        metadata = json.loads(metadata_bytes.decode("utf-8"))
-
-                        # Ensure frame_number in metadata matches our frame_number
-                        if (
-                            "frame_number" in metadata
-                            and int(metadata["frame_number"]) != frame_number
-                        ):
-                            logger.warning(
-                                f"Frame number mismatch: metadata={metadata['frame_number']}, expected={frame_number}"
-                            )
-                            metadata["frame_number"] = frame_number
-                    except Exception as e:
-                        # Create simple metadata if extraction fails
-                        logger.warning(
-                            f"Failed to extract metadata: {e}, creating basic metadata"
-                        )
-
-                    # Always create metadata (whether it was extracted or not)
-                    if metadata is None:
-                        metadata = {
-                            "frame_number": frame_number,
-                            "timestamp": time.time(),
-                        }
+                    # Create simple metadata with frame number
+                    metadata = {
+                        "frame_number": frame_number,
+                        "timestamp": time.time(),
+                    }
 
                     # Save metadata to JSON file
                     with open(
                         os.path.join(device_folder, "json", f"{base_filename}.json"),
                         "w",
                     ) as f:
-                        json.dump(metadata, f, indent=4)
+                        # Use ensure_ascii=False to handle unicode properly
+                        # Use separators without extra spaces to ensure consistent formatting
+                        json.dump(
+                            metadata, f, ensure_ascii=False, separators=(",", ":")
+                        )
 
                     # Create frames directory and save image
                     os.makedirs(os.path.join(device_folder, "frames"), exist_ok=True)
 
-                    # Save image (try to preserve EXIF if available)
-                    try:
-                        if "exif" in image.info:
-                            image.save(
-                                os.path.join(
-                                    device_folder, "frames", f"{base_filename}.jpg"
-                                ),
-                                "JPEG",
-                                exif=image.info["exif"],
-                            )
-                        else:
-                            image.save(
-                                os.path.join(
-                                    device_folder, "frames", f"{base_filename}.jpg"
-                                ),
-                                "JPEG",
-                            )
-                    except Exception as e:
-                        logger.warning(
-                            f"Failed to save with EXIF: {e}, saving without EXIF"
-                        )
-                        # Try again without EXIF if saving with EXIF fails
-                        image.save(
-                            os.path.join(
-                                device_folder, "frames", f"{base_filename}.jpg"
-                            ),
-                            "JPEG",
-                        )
+                    # Save image
+                    image.save(
+                        os.path.join(device_folder, "frames", f"{base_filename}.jpg"),
+                        "JPEG",
+                    )
 
                     # Only increment the counter for auto-numbered frames
                     if frame_number is None:
@@ -261,7 +233,12 @@ class VideoStreamHandler:
                                 ),
                                 "w",
                             ) as f:
-                                json.dump(metadata, f, indent=4)
+                                json.dump(
+                                    metadata,
+                                    f,
+                                    ensure_ascii=False,
+                                    separators=(",", ":"),
+                                )
 
                             logger.info(
                                 f"Successfully recovered frame with full JPEG signature detection"
@@ -280,6 +257,54 @@ class VideoStreamHandler:
 
         except Exception as e:
             logger.exception(f"Error handling frame: {e}")
+
+    def handle_frame_batch(self, device_id, timestamp, frames_batch):
+        """
+        Handle a batch of frames with frame_number and image_base64 directly in the payload
+
+        Args:
+            device_id: The device ID
+            timestamp: The session timestamp
+            frames_batch: A list of dicts, each with frame_number and image_base64 fields
+        """
+        try:
+            logger.info(
+                f"Processing batch of {len(frames_batch)} frames from device {device_id}"
+            )
+
+            processed_count = 0
+            for frame_data in frames_batch:
+                try:
+                    # Extract frame number and image data from the frame object
+                    if (
+                        "frame_number" not in frame_data
+                        or "image_base64" not in frame_data
+                    ):
+                        logger.error(
+                            f"Missing required fields in frame data: {frame_data.keys()}"
+                        )
+                        continue
+
+                    frame_number = frame_data["frame_number"]
+                    image_base64 = frame_data["image_base64"]
+
+                    # Process the individual frame
+                    self.handle_frame_base64(
+                        device_id, timestamp, image_base64, frame_number
+                    )
+                    processed_count += 1
+
+                except Exception as e:
+                    logger.error(
+                        f"Error processing frame {frame_data.get('frame_number')}: {e}"
+                    )
+
+            logger.info(
+                f"Successfully processed {processed_count} out of {len(frames_batch)} frames"
+            )
+
+        except Exception as e:
+            logger.exception(f"Error handling frame batch: {e}")
 
     def collect_jpg_files(self, base_folder):
         jpg_files = []
@@ -374,7 +399,7 @@ class VideoStreamHandler:
 
                 # Write updated master file
                 with open(master_file, "w") as f:
-                    json.dump(all_data, f, indent=2)
+                    json.dump(all_data, f, ensure_ascii=False, separators=(",", ":"))
 
             logger.info(
                 f"Merged JSON files for device {device_id}, timestamp {timestamp}"
@@ -503,59 +528,100 @@ class MQTTHandler:
                 message_type = parts[4]
 
                 if message_type == "frame":
-                    # Try to determine if this is a JSON batch or a single base64 image
-                    try:
-                        # Try to decode as string first (for JSON)
-                        payload_str = msg.payload.decode("utf-8")
-                        # Try to parse as JSON
-                        frame_batch = json.loads(payload_str)
+                    # Flag to track if the message was processed by any handler
+                    message_processed = False
 
-                        # Check if it's a dictionary (batch of frames)
-                        if isinstance(frame_batch, dict):
-                            # Check if the keys follow the pattern "frame_number_X"
+                    # Try to parse as JSON first to check if it's the new batch format
+                    try:
+                        payload_str = msg.payload.decode("utf-8")
+                        payload_data = json.loads(payload_str)
+
+                        # Check if it's a list (new batch format with frame_number)
+                        if isinstance(payload_data, list) and not message_processed:
+                            # Check if the list items have frame_number and image_base64 fields
+                            if (
+                                len(payload_data) > 0
+                                and "frame_number" in payload_data[0]
+                                and "image_base64" in payload_data[0]
+                            ):
+                                logger.info(
+                                    f"Received batch of {len(payload_data)} frames with new format from device {device_id}"
+                                )
+                                self.video_handler.handle_frame_batch(
+                                    device_id, timestamp, payload_data
+                                )
+                                message_processed = True
+                                return  # Exit to prevent double processing
+
+                        # Check if it's a dictionary (previous batch format)
+                        if isinstance(payload_data, dict) and not message_processed:
+                            # Check if it has the previous batch format
                             has_frame_number_format = any(
                                 key.startswith("frame_number_")
-                                for key in frame_batch.keys()
+                                for key in payload_data.keys()
                             )
 
                             if has_frame_number_format:
                                 logger.info(
-                                    f"Received batch of {len(frame_batch)} frames with frame_number_X format from device {device_id}"
+                                    f"Received batch of {len(payload_data)} frames with frame_number_X format from device {device_id}"
                                 )
                                 self._process_frame_batch(
-                                    device_id, timestamp, frame_batch
+                                    device_id, timestamp, payload_data
                                 )
-                            else:
-                                # Check if the keys are numeric (older format)
-                                try:
-                                    # Try to convert at least one key to int to check format
-                                    int(next(iter(frame_batch.keys())))
-                                    logger.info(
-                                        f"Received batch with numeric keys from device {device_id}"
-                                    )
-                                    # Process using older numeric key format
-                                    self._process_numeric_frame_batch(
-                                        device_id, timestamp, frame_batch
-                                    )
-                                except (ValueError, StopIteration):
-                                    # Not our expected format, try to handle as single frame
-                                    logger.warning(
-                                        f"Received JSON data but not in expected frame batch format"
-                                    )
-                                    self.video_handler.handle_frame_base64(
-                                        device_id, timestamp, msg.payload
-                                    )
-                        else:
-                            # JSON but not a dictionary, try to handle as single frame
-                            logger.warning(f"Received JSON data but not a dictionary")
-                            self.video_handler.handle_frame_base64(
-                                device_id, timestamp, msg.payload
-                            )
+                                message_processed = True
+                                return  # Exit to prevent double processing
+
+                            # Check if the keys are numeric (older format)
+                            try:
+                                # Try to convert at least one key to int to check format
+                                int(next(iter(payload_data.keys())))
+                                logger.info(
+                                    f"Received batch with numeric keys from device {device_id}"
+                                )
+                                # Process using older numeric key format
+                                self._process_numeric_frame_batch(
+                                    device_id, timestamp, payload_data
+                                )
+                                message_processed = True
+                                return  # Exit to prevent double processing
+                            except (ValueError, StopIteration):
+                                # Not our expected format, continue to handle as single frame
+                                pass
+
                     except (json.JSONDecodeError, UnicodeDecodeError):
                         # Not JSON, treat as single base64 frame
-                        self.video_handler.handle_frame_base64(
-                            device_id, timestamp, msg.payload
+                        pass
+
+                    # If we get here, it's a single frame or unrecognized format that wasn't processed yet
+                    if not message_processed:
+                        logger.info(
+                            f"Processing as single frame from device {device_id}"
                         )
+                        try:
+                            # Make sure the payload is valid base64 by padding if necessary
+                            payload = msg.payload
+                            if isinstance(payload, bytes):
+                                try:
+                                    payload = payload.decode("utf-8")
+                                except UnicodeDecodeError:
+                                    # If it can't be decoded as utf-8, it's likely already binary
+                                    pass
+
+                            # Add padding if needed (ensure length is multiple of 4)
+                            if isinstance(payload, str):
+                                # Check if we need to add padding
+                                padding_needed = len(payload) % 4
+                                if padding_needed > 0:
+                                    logger.info(
+                                        f"Adding {4 - padding_needed} padding characters to base64 string"
+                                    )
+                                    payload += "=" * (4 - padding_needed)
+
+                            self.video_handler.handle_frame_base64(
+                                device_id, timestamp, payload
+                            )
+                        except Exception as e:
+                            logger.error(f"Error processing single frame: {e}")
 
             except Exception as e:
                 logger.error(f"Error processing message: {e}")
