@@ -21,6 +21,9 @@ from django.core.cache import cache
 import logging
 from utils import S3Utils
 import piexif
+from datetime import datetime
+from paho.mqtt import client as mqtt_client
+import ssl
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -171,6 +174,52 @@ class VideoProcessingThread(threading.Thread):
         self.video_data = video_data
         self.status_key = f"video_processing_{device_id}"
 
+        # Initialize MQTT client for publishing results
+        self.mqtt_client = None
+        try:
+            # Configuration for MQTT
+            mqtt_broker = settings.MQTT_BROKER
+            mqtt_port = settings.MQTT_PORT
+            mqtt_username = settings.MQTT_USERNAME
+            mqtt_password = settings.MQTT_PASSWORD
+            cert_path = settings.CERTIFICATE_PATH
+
+            # Create MQTT client
+            self.mqtt_client = mqtt_client.Client()
+
+            # Setup TLS if certificate path exists
+            if os.path.exists(cert_path):
+                try:
+                    # Setup TLS with certificates
+                    self.mqtt_client.tls_set(
+                        ca_certs=f"{cert_path}/ca.crt",
+                        certfile=f"{cert_path}/device/client.crt",
+                        keyfile=f"{cert_path}/device/client.key",
+                        cert_reqs=ssl.CERT_REQUIRED,
+                        tls_version=ssl.PROTOCOL_TLSv1_2,
+                    )
+                    self.mqtt_client.tls_insecure_set(True)
+                    self.mqtt_client.username_pw_set(mqtt_username, mqtt_password)
+                    logger.info(
+                        f"TLS configured for MQTT client with certificates from {cert_path}"
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to setup TLS for MQTT client: {e}")
+                    # Fall back to username/password only if TLS setup fails
+                    if mqtt_username and mqtt_password:
+                        self.mqtt_client.username_pw_set(mqtt_username, mqtt_password)
+            elif mqtt_username and mqtt_password:
+                # Use username/password if no certificates
+                self.mqtt_client.username_pw_set(mqtt_username, mqtt_password)
+
+            # Connect to broker
+            self.mqtt_client.connect(mqtt_broker, mqtt_port)
+            self.mqtt_client.loop_start()
+            logger.info(f"MQTT client initialized and connected for device {device_id}")
+        except Exception as e:
+            logger.error(f"Failed to initialize MQTT client: {e}")
+            self.mqtt_client = None
+
     def run(self):
         try:
             cache.set(self.status_key, "processing", timeout=3600)  # 1 hour timeout
@@ -219,6 +268,10 @@ class VideoProcessingThread(threading.Thread):
             self.video_data["video_path"] = video_url
 
             logger.info(f"create video entry {self.video_data}")
+
+            video = None
+            report = None
+
             with transaction.atomic():
                 # Create serializer with context
                 serializer = VideoSerializer(
@@ -229,10 +282,11 @@ class VideoProcessingThread(threading.Thread):
                     raise Exception(f"Invalid video data: {serializer.errors}")
 
                 # Clean up frame files
-
                 video = serializer.save()
 
-                self.create_report(report_json=master_json, video=video)
+                # Create report
+                report = self.create_report(report_json=master_json, video=video)
+
                 frames_path = os.path.join(
                     settings.MEDIA_ROOT,
                     str(self.device_id),
@@ -257,12 +311,51 @@ class VideoProcessingThread(threading.Thread):
                     if not frame_path.startswith("master"):
                         os.remove(frame_path)
 
+            # Publish results to MQTT
+            if video and report and self.mqtt_client:
+                self.publish_results(video, report)
+
             cache.set(self.status_key, "completed", timeout=3600)
 
         except Exception as e:
-            logger.exception(e)
             logger.error(f"Video processing failed: {str(e)}")
             cache.set(self.status_key, f"failed: {str(e)}", timeout=3600)
+        finally:
+            # Clean up MQTT client
+            if self.mqtt_client:
+                try:
+                    self.mqtt_client.loop_stop()
+                    self.mqtt_client.disconnect()
+                except Exception as e:
+                    logger.error(f"Error disconnecting MQTT client: {e}")
+
+    def publish_results(self, video, report):
+        """Publish processing results to MQTT topic"""
+        try:
+            # Prepare result data
+            result_data = {
+                "video_id": str(video.video_id),
+                "result_date": datetime.now().isoformat(),
+                "score": report.score.get("score", ""),
+                "comments": "Video processing completed successfully",
+            }
+
+            # Set topic
+            topic = f"video/result/{self.device_id}"
+
+            # Publish to MQTT
+            result = self.mqtt_client.publish(
+                topic, json.dumps(result_data)  # At least once delivery
+            )
+
+            # Check if publishing was successful
+            if result.rc == mqtt_client.MQTT_ERR_SUCCESS:
+                logger.info(f"Published results to {topic} successfully")
+            else:
+                logger.error(f"Failed to publish results to {topic}: {result.rc}")
+
+        except Exception as e:
+            logger.exception(f"Error publishing results to MQTT: {e}")
 
     def create_report(self, report_json, video):
         score = {"score": 4.5}
@@ -272,7 +365,8 @@ class VideoProcessingThread(threading.Thread):
             raise Exception(f"Invalid video data: {serializer.errors}")
         else:
             logger.info("create report entry")
-            serializer.save()
+            report = serializer.save()
+            return report
 
     def upload_to_s3(self, video_path):
         s3util.upload_file(file_location=video_path, key=video_path.replace("\\", "/"))
@@ -322,7 +416,7 @@ class VideoProcessingThread(threading.Thread):
                 "outcome.avi",
             )
             fourcc = cv2.VideoWriter_fourcc("F", "M", "P", "4")
-            out = cv2.VideoWriter(output_path, fourcc, 24.0, (width, height))
+            out = cv2.VideoWriter(output_path, fourcc, 30.0, (width, height))
 
             # Add frames to video
             for frame_file in frames:
@@ -333,7 +427,7 @@ class VideoProcessingThread(threading.Thread):
             out.release()
             return output_path
         except Exception as e:
-            if os.path.exists(output_path):
+            if "output_path" in locals() and os.path.exists(output_path):
                 os.remove(output_path)
             raise e
 

@@ -192,3 +192,9 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 1000 * 1024 * 1024  # 1000MB in bytes
 # Media settings
 MEDIA_URL = "/media/"
 MEDIA_ROOT = os.path.join(MEDIA_ROOT, "media")
+
+MQTT_BROKER = os.getenv("MQTT_BROKER", "127.0.0.1")
+MQTT_PORT = int(os.getenv("MQTT_PORT", 8883))
+MQTT_USERNAME = os.getenv("MQTT_USERNAME", "")
+MQTT_PASSWORD = os.getenv("MQTT_PASSWORD", "")
+CERTIFICATE_PATH = os.getenv("CERT_PATH", "certificates")
