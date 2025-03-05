@@ -157,10 +157,7 @@ class VideoStreamHandler:
                     image = Image.open(image_bytes)
 
                     # Create simple metadata with frame number
-                    metadata = {
-                        "frame_number": frame_number,
-                        "timestamp": time.time(),
-                    }
+                    metadata = {"frame_number": frame_number}
 
                     # Save metadata to JSON file
                     with open(
