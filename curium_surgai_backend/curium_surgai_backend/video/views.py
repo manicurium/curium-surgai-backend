@@ -87,7 +87,9 @@ class VideoCreateView(APIView):
             )
 
         try:
-            videos = Video.objects.filter(uploaded_by=valid_uuid)
+            videos = Video.objects.filter(uploaded_by=valid_uuid).order_by(
+                "-upload_date"
+            )
             serializer = VideoSerializer(videos, many=True)
             return Response(serializer.data)
         except ValidationError as e:
