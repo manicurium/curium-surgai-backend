@@ -260,6 +260,7 @@ class VideoProcessingThread(threading.Thread):
             cache.set(self.status_key, "completed", timeout=3600)
 
         except Exception as e:
+            logger.exception(e)
             logger.error(f"Video processing failed: {str(e)}")
             cache.set(self.status_key, f"failed: {str(e)}", timeout=3600)
 
