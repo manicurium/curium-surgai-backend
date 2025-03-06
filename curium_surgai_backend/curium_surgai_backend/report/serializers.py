@@ -5,7 +5,7 @@ from .models import Report
 class ReportSerializer(serializers.ModelSerializer):
     class Meta:
         model = Report
-        fields = ("report_id", "video", "report_date", "score")
+        fields = ("report_id", "video", "report_date", "score", "report_json")
         read_only_fields = ("report_id", "report_date")
 
     def __init__(self, *args, **kwargs):
